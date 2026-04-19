@@ -2,8 +2,25 @@ import { useState, useEffect } from 'react';
 import api from '../../api/axios';
 import { useAuth } from '../../context/AuthContext';
 import { DollarSign } from 'lucide-react';
-// import { Bar } from 'react-chartjs-2'; // for chart
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
 
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend
+);
 const Earnings = () => {
   const [earnings, setEarnings] = useState({ totalEarnings: 0, history: [] });
   const [loading, setLoading] = useState(true);
@@ -25,6 +42,35 @@ const Earnings = () => {
   if (user?.isActive === false) return null;
   if (loading) return <div>Loading...</div>;
 
+  const monthlyData = new Array(12).fill(0);
+  earnings.history.forEach(item => {
+    const month = new Date(item.date).getMonth();
+    monthlyData[month] += item.netEarned;
+  });
+
+  const chartData = {
+    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    datasets: [
+      {
+        label: 'Net Earnings (₹)',
+        data: monthlyData,
+        backgroundColor: 'rgba(30, 64, 175, 0.8)',
+        borderRadius: 6,
+      },
+    ],
+  };
+
+  const chartOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    plugins: {
+      legend: { display: false },
+    },
+    scales: {
+      y: { beginAtZero: true }
+    }
+  };
+
   return (
     <div className="space-y-8 max-w-6xl mx-auto">
       <div className="bg-primary text-white rounded-3xl p-8 md:p-12 shadow-lg relative overflow-hidden">
@@ -34,6 +80,13 @@ const Earnings = () => {
         <div className="relative z-10">
           <p className="text-blue-200 text-lg font-medium mb-2 uppercase tracking-wider">Total Earnings</p>
           <h1 className="text-5xl md:text-6xl font-heading font-extrabold text-white">₹{earnings.totalEarnings}</h1>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden p-6">
+        <h2 className="text-xl font-bold text-gray-900 mb-6">Monthly Earnings</h2>
+        <div className="h-64 w-full">
+          <Bar data={chartData} options={chartOptions} />
         </div>
       </div>
 

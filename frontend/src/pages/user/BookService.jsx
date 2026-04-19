@@ -70,6 +70,7 @@ const BookService = () => {
         paymentType: formData.paymentType
       };
 
+      console.log('Booking Payload:', payload);
       const res = await api.post('/bookings', payload);
       const booking = res.data.data;
 
@@ -100,9 +101,11 @@ const BookService = () => {
                 razorpaySignature: response.razorpay_signature,
                 bookingId: booking._id
               });
-              toast.success('Booking confirmed & paid successfully!');
+              setProcessing(false);
+              toast.success('Booking Confirmed Successfully');
               navigate('/user/bookings');
             } catch (err) {
+              setProcessing(false);
               toast.error('Payment verification failed');
               navigate('/user/bookings');
             }
@@ -116,31 +119,27 @@ const BookService = () => {
           }
         };
         
-        if(options.key === 'dummy' || options.key === 'xxx' || options.key.startsWith('dummy')) {
-           // auto verify for dummy
-           toast.success('Dummy booking confirmed & paid successfully!');
-           await api.post('/payments/verify', {
-                razorpayOrderId: orderId,
-                razorpayPaymentId: 'dummy_pay',
-                razorpaySignature: 'dummy_sig',
-                bookingId: booking._id
-            });
-            navigate('/user/bookings');
-        } else {
-            const rzp1 = new window.Razorpay(options);
-            rzp1.on('payment.failed', function (response){
-              toast.error('Payment failed');
-              navigate('/user/bookings');
-            });
-            rzp1.open();
+        if (!options.key) {
+          console.error("Razorpay key is missing from frontend environment variables");
+          toast.error("Payment configuration error");
+          setProcessing(false);
+          return;
         }
+
+        const rzp1 = new window.Razorpay(options);
+        rzp1.on('payment.failed', function (response){
+          toast.error('Payment failed');
+          navigate('/user/bookings');
+        });
+        rzp1.open();
       } else {
-        toast.success('Booking confirmed successfully!');
+        setProcessing(false);
+        toast.success('Booking Confirmed Successfully');
         navigate('/user/bookings');
       }
     } catch (error) {
-      toast.error(error.response?.data?.message || 'Booking failed');
       setProcessing(false);
+      toast.error(error.response?.data?.message || 'Booking failed');
     }
   };
 

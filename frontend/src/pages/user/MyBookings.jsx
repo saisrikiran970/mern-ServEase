@@ -1,9 +1,21 @@
 import { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../../api/axios';
 import StatusBadge from '../../components/StatusBadge';
 import RatingStars from '../../components/RatingStars';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+
+// Load Razorpay Script dynamically
+const loadRazorpayScript = () => {
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+};
 
 const MyBookings = () => {
   const [bookings, setBookings] = useState([]);
@@ -11,6 +23,7 @@ const MyBookings = () => {
   const [reviewModal, setReviewModal] = useState({ show: false, bookingId: null, rating: 5, review: '' });
   
   const { user } = useAuth();
+  const location = useLocation();
 
   const fetchBookings = async () => {
     try {
@@ -24,7 +37,7 @@ const MyBookings = () => {
 
   useEffect(() => {
     fetchBookings();
-  }, []);
+  }, [location.key]);
 
   const handleCancel = async (id) => {
     if (window.confirm('Are you sure you want to cancel this booking?')) {
@@ -54,6 +67,12 @@ const MyBookings = () => {
 
   const handlePayNow = async (booking) => {
     try {
+      const isLoaded = await loadRazorpayScript();
+      if (!isLoaded) {
+        toast.error('Razorpay SDK failed to load');
+        return;
+      }
+
       const orderRes = await api.post('/payments/create-order', { bookingId: booking._id });
       const { orderId, amount } = orderRes.data.data;
 
@@ -82,20 +101,14 @@ const MyBookings = () => {
         theme: { color: '#1E40AF' }
       };
 
-      if(options.key === 'dummy' || options.key === 'xxx' || options.key.startsWith('dummy')) {
-           // auto verify for dummy
-           toast.success('Dummy payment successful!');
-           await api.post('/payments/verify', {
-                razorpayOrderId: orderId,
-                razorpayPaymentId: 'dummy_pay',
-                razorpaySignature: 'dummy_sig',
-                bookingId: booking._id
-            });
-            fetchBookings();
-      } else {
-        const rzp1 = new window.Razorpay(options);
-        rzp1.open();
+      if (!options.key) {
+        console.error("Razorpay key is missing from frontend environment variables");
+        toast.error("Payment configuration error");
+        return;
       }
+
+      const rzp1 = new window.Razorpay(options);
+      rzp1.open();
     } catch (error) {
       toast.error('Failed to initiate payment');
     }
@@ -150,7 +163,7 @@ const MyBookings = () => {
                     </button>
                   )}
                   
-                  {booking.status === 'completed' && booking.paymentType === 'after' && (
+                  {booking.status === 'completed' && booking.paymentType === 'after' && !booking.isPaid && (
                     <button onClick={() => handlePayNow(booking)} className="px-4 py-2 text-sm font-semibold text-white bg-primary hover:bg-blue-800 rounded-lg transition-colors">
                       Pay Now
                     </button>

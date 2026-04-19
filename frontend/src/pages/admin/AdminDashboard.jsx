@@ -29,15 +29,24 @@ const AdminDashboard = () => {
 
   if (loading) return <div>Loading...</div>;
 
-  // Dummy Chart Data
+  // Dynamic Chart Data
   const revenueData = {
-    labels: ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'],
-    datasets: [{ label: 'Revenue (₹)', data: [12000, 19000, 15000, 22000, 18000, 25000], borderColor: '#1E40AF', backgroundColor: '#1E40AF', tension: 0.4 }]
+    labels: stats?.revenueLabels || ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr'],
+    datasets: [{ 
+      label: 'Revenue (₹)', 
+      data: stats?.revenueData || [0, 0, 0, 0, 0, 0], 
+      borderColor: '#1E40AF', 
+      backgroundColor: '#1E40AF', 
+      tension: 0.4 
+    }]
   };
 
   const statusData = {
     labels: ['Completed', 'Pending', 'Assigned', 'In-Progress', 'Cancelled'],
-    datasets: [{ data: [60, 15, 10, 10, 5], backgroundColor: ['#10B981', '#F59E0B', '#6366F1', '#F97316', '#EF4444'] }]
+    datasets: [{ 
+      data: stats?.statusChart || [0, 0, 0, 0, 0], 
+      backgroundColor: ['#10B981', '#F59E0B', '#6366F1', '#F97316', '#EF4444'] 
+    }]
   };
 
   return (

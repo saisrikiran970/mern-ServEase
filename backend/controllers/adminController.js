@@ -13,9 +13,41 @@ exports.getDashboardStats = async (req, res) => {
     const payments = await Payment.find({ status: 'paid' });
     const totalRevenue = payments.reduce((acc, curr) => acc + curr.adminCommission, 0);
 
+    // Bookings by Status
+    const statuses = ['completed', 'pending', 'assigned', 'in-progress', 'cancelled'];
+    const statusChart = [];
+    for (const st of statuses) {
+      statusChart.push(await Booking.countDocuments({ status: st }));
+    }
+
+    // Revenue Trend (Last 6 Months)
+    const revenueLabels = [];
+    const revenueData = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date();
+      d.setMonth(d.getMonth() - i);
+      const targetMonth = d.getMonth();
+      const targetYear = d.getFullYear();
+      
+      const monthRev = payments.reduce((acc, curr) => {
+        if (!curr.createdAt) return acc;
+        const pDate = new Date(curr.createdAt);
+        if (pDate.getMonth() === targetMonth && pDate.getFullYear() === targetYear) {
+          return acc + curr.adminCommission;
+        }
+        return acc;
+      }, 0);
+      
+      revenueLabels.push(d.toLocaleString('default', { month: 'short' }));
+      revenueData.push(monthRev);
+    }
+
     res.status(200).json({
       success: true,
-      data: { totalUsers, totalWorkers, activeServices, completedBookings, totalRevenue }
+      data: { 
+        totalUsers, totalWorkers, activeServices, completedBookings, totalRevenue,
+        statusChart, revenueLabels, revenueData
+      }
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
@@ -84,11 +116,17 @@ exports.assignWorker = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Worker is already booked for this time slot' });
     }
 
-    booking.workerId = workerId;
-    booking.status = 'assigned';
-    await booking.save();
+    console.log('Assigning worker. Booking ID:', req.params.id, 'Worker ID:', workerId);
 
-    res.status(200).json({ success: true, data: booking });
+    const updateResult = await Booking.updateOne(
+      { _id: req.params.id }, 
+      { $set: { workerId: workerId, status: 'assigned' } }
+    );
+    console.log('Update Result:', updateResult);
+
+    const updatedBooking = await Booking.findById(req.params.id);
+
+    res.status(200).json({ success: true, data: updatedBooking });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -121,6 +159,18 @@ exports.getAnalytics = async (req, res) => {
   try {
     // Generate dummy data for charts for now, or implement actual aggregation
     res.status(200).json({ success: true, message: 'Analytics endpoint placeholder' });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getBookingPayment = async (req, res) => {
+  try {
+    const payment = await Payment.findOne({ bookingId: req.params.id });
+    if (!payment) {
+      return res.status(404).json({ success: false, message: 'Payment not found for this booking' });
+    }
+    res.status(200).json({ success: true, data: payment });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

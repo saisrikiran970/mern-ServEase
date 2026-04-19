@@ -1,5 +1,7 @@
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { useState, useEffect } from 'react';
+import api from '../api/axios';
 import { 
   Home, Briefcase, DollarSign, Star, 
   Users, Calendar, Settings, PieChart, CheckSquare
@@ -7,6 +9,30 @@ import {
 
 const Sidebar = () => {
   const { user } = useAuth();
+  const [pendingCount, setPendingCount] = useState(0);
+
+  useEffect(() => {
+    if (user?.role === 'worker') {
+      const fetchCount = async () => {
+        try {
+          const res = await api.get('/worker/jobs/pending');
+          setPendingCount(res.data.data.length);
+        } catch (error) {
+          console.error(error);
+        }
+      };
+      fetchCount();
+      const interval = setInterval(fetchCount, 30000);
+      
+      const handleRefresh = () => fetchCount();
+      window.addEventListener('refreshWorkerJobs', handleRefresh);
+      
+      return () => {
+        clearInterval(interval);
+        window.removeEventListener('refreshWorkerJobs', handleRefresh);
+      };
+    }
+  }, [user]);
 
   if (!user) return null;
 
@@ -18,7 +44,7 @@ const Sidebar = () => {
     ],
     worker: [
       { to: '/worker/dashboard', icon: PieChart, label: 'Overview' },
-      { to: '/worker/jobs', icon: Briefcase, label: 'My Jobs' },
+      { to: '/worker/jobs', icon: Briefcase, label: 'My Jobs', badge: pendingCount > 0 ? pendingCount : null },
       { to: '/worker/earnings', icon: DollarSign, label: 'Earnings' },
     ],
     admin: [
@@ -48,15 +74,22 @@ const Sidebar = () => {
               key={link.to}
               to={link.to}
               className={({ isActive }) =>
-                `flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-colors ${
+                `flex items-center justify-between px-4 py-3 text-sm font-medium rounded-xl transition-colors ${
                   isActive
                     ? 'bg-primary text-white'
                     : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`
               }
             >
-              <link.icon className="mr-3 h-5 w-5" />
-              {link.label}
+              <div className="flex items-center">
+                <link.icon className="mr-3 h-5 w-5" />
+                {link.label}
+              </div>
+              {link.badge && (
+                <span className="bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full">
+                  {link.badge}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

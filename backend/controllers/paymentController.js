@@ -2,6 +2,7 @@ const Razorpay = require('razorpay');
 const crypto = require('crypto');
 const Payment = require('../models/Payment');
 const Booking = require('../models/Booking');
+const User = require('../models/User');
 
 const razorpay = new Razorpay({
   key_id: process.env.RAZORPAY_KEY_ID || 'dummy_id',
@@ -18,19 +19,6 @@ exports.createOrder = async (req, res) => {
     }
 
     const amount = booking.totalAmount;
-
-    // Allow dummy mode if keys are placeholders
-    if (process.env.RAZORPAY_KEY_ID === 'xxx') {
-      console.warn("Using Razorpay placeholder keys. Bypassing actual Razorpay creation.");
-      const dummyPayment = await Payment.create({
-        bookingId,
-        userId: req.user._id,
-        amount,
-        status: 'created',
-        razorpayOrderId: 'order_dummy_' + Date.now()
-      });
-      return res.status(200).json({ success: true, data: { orderId: dummyPayment.razorpayOrderId, amount } });
-    }
 
     const options = {
       amount: amount * 100, // amount in smallest currency unit
@@ -63,19 +51,6 @@ exports.verifyPayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Payment record not found' });
     }
 
-    // Dummy mode bypass
-    if (process.env.RAZORPAY_KEY_ID === 'xxx') {
-      payment.razorpayPaymentId = razorpayPaymentId || 'pay_dummy';
-      payment.razorpaySignature = razorpaySignature || 'sig_dummy';
-      payment.status = 'paid';
-      payment.adminCommission = payment.amount * 0.10;
-      payment.workerEarnings = payment.amount * 0.90;
-      await payment.save();
-
-      await Booking.findByIdAndUpdate(bookingId, { status: 'paid' });
-      return res.status(200).json({ success: true, message: 'Payment verified (Dummy Mode)' });
-    }
-
     const body = razorpayOrderId + "|" + razorpayPaymentId;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -90,7 +65,25 @@ exports.verifyPayment = async (req, res) => {
       payment.workerEarnings = payment.amount * 0.90;
       await payment.save();
 
-      await Booking.findByIdAndUpdate(bookingId, { status: 'paid' });
+      const booking = await Booking.findById(bookingId);
+      if (booking) {
+        if (booking.paymentType === 'after') {
+          booking.status = 'completed';
+        } else {
+          booking.status = 'paid';
+        }
+        await booking.save();
+        
+        if (booking.workerId) {
+          try {
+            await User.findByIdAndUpdate(booking.workerId, {
+              $inc: { totalEarnings: payment.workerEarnings }
+            });
+          } catch (workerUpdateError) {
+            console.error(`Failed to update earnings for worker ${booking.workerId}:`, workerUpdateError);
+          }
+        }
+      }
 
       res.status(200).json({ success: true, message: 'Payment verified successfully' });
     } else {
@@ -99,6 +92,7 @@ exports.verifyPayment = async (req, res) => {
       res.status(400).json({ success: false, message: 'Invalid signature' });
     }
   } catch (error) {
+    console.error('Payment verification failed:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 };

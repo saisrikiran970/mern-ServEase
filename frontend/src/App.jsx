@@ -7,6 +7,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Navbar from './components/Navbar';
 import Footer from './components/Footer';
 import Sidebar from './components/Sidebar';
+import WorkerNotificationManager from './components/WorkerNotificationManager';
 
 // Public Pages
 import Home from './pages/Home';
@@ -50,6 +51,7 @@ function App() {
             </Routes>
             
             <main className="flex-1 p-4 md:p-8 overflow-y-auto">
+              <WorkerNotificationManager />
               <Routes>
                 {/* Public */}
                 <Route path="/" element={<Home />} />

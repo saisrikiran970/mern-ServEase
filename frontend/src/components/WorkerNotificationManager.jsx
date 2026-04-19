@@ -3,10 +3,12 @@ import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import toast from 'react-hot-toast';
 import { Bell, CheckCircle, XCircle } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 
-const WorkerNotificationManager = ({ children }) => {
+const WorkerNotificationManager = () => {
   const { user } = useAuth();
-  const [pendingJob, setPendingJob] = useState(null);
+  const [pendingNotifications, setPendingNotifications] = useState([]);
+  const location = useLocation();
 
   useEffect(() => {
     // Only run if the user is a worker
@@ -14,16 +16,11 @@ const WorkerNotificationManager = ({ children }) => {
 
     const checkJobs = async () => {
       try {
-        const res = await api.get('/worker/jobs');
-        const assignedJobs = res.data.data.filter(job => job.status === 'assigned');
-        if (assignedJobs.length > 0) {
-          // Show the first assigned job
-          setPendingJob(assignedJobs[0]);
-        } else {
-          setPendingJob(null);
-        }
+        const res = await api.get('/worker/jobs/pending');
+        setPendingNotifications(res.data.data);
+        console.log('Worker polling executed. Assigned bookings found:', res.data.data.length);
       } catch (error) {
-        console.error('Failed to fetch worker jobs for notification', error);
+        console.error('Failed to fetch pending worker jobs', error);
       }
     };
 
@@ -39,61 +36,62 @@ const WorkerNotificationManager = ({ children }) => {
   const handleAction = async (jobId, action) => {
     try {
       if (action === 'accept') {
-        // According to spec, accepting it should set it to 'in-progress'
-        // Wait, the backend currently doesn't change status to in-progress for 'acceptJob', it just says 'Job accepted'.
-        // Let's call updateJobStatus directly to set it to 'in-progress'
-        await api.put(`/worker/jobs/${jobId}/status`, { status: 'in-progress' });
-        toast.success('Job Accepted and is now In-Progress!');
+        await api.put(`/worker/jobs/${jobId}/accept`);
+        toast.success('Job Accepted Successfully');
       } else if (action === 'reject') {
         await api.put(`/worker/jobs/${jobId}/reject`, { reason: 'Schedule conflict' });
-        toast.error('Job Rejected');
+        toast.success('Job Rejected');
       }
       
-      setPendingJob(null);
+      setPendingNotifications(prev => prev.filter(job => job._id !== jobId));
+      
+      // If the worker is on the MyJobs page, we want to trigger a refresh.
+      // Easiest way in this setup is to dispatch a custom event.
+      if (location.pathname === '/worker/jobs') {
+        window.dispatchEvent(new Event('refreshWorkerJobs'));
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || `Failed to ${action} job`);
     }
   };
 
+  if (!user || user.role !== 'worker' || pendingNotifications.length === 0) return null;
+
   return (
-    <>
-      {children}
-      
-      {/* Notification Modal */}
-      {pendingJob && (
-        <div className="fixed bottom-4 right-4 sm:bottom-8 sm:right-8 w-full max-w-sm bg-white rounded-2xl shadow-2xl border border-gray-200 p-6 z-50 animate-bounce-in">
+    <div className="w-full flex flex-col items-center gap-3 mb-6">
+      {pendingNotifications.map(job => (
+        <div key={job._id} className="w-full max-w-4xl bg-yellow-50 border-l-4 border-yellow-500 p-4 rounded-xl shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center gap-4 animate-fade-in">
           <div className="flex items-start gap-4">
-            <div className="bg-blue-100 p-3 rounded-full text-primary shrink-0">
-              <Bell className="w-6 h-6" />
+            <div className="bg-yellow-100 p-2 rounded-full text-yellow-600 shrink-0 mt-1">
+              <Bell className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-gray-900 mb-1">New Job Request!</h3>
-              <p className="text-sm text-gray-600 mb-2">
-                <strong>{pendingJob.serviceId?.title}</strong>
+              <h3 className="text-lg font-bold text-gray-900 mb-1">New Job Assigned: {job.serviceId?.title}</h3>
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">Customer:</span> {job.userId?.name} | <span className="font-semibold">Address:</span> {job.address?.street}, {job.address?.city}
               </p>
-              <div className="text-xs text-gray-500 mb-4 space-y-1">
-                <p>📍 {pendingJob.address?.street}, {pendingJob.address?.city}</p>
-                <p>📅 {new Date(pendingJob.date).toLocaleDateString()} | {pendingJob.timeSlot}</p>
-              </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => handleAction(pendingJob._id, 'accept')}
-                  className="flex-1 bg-green-600 hover:bg-green-700 text-white py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-1 transition-colors"
-                >
-                  <CheckCircle className="w-4 h-4" /> Accept
-                </button>
-                <button 
-                  onClick={() => handleAction(pendingJob._id, 'reject')}
-                  className="flex-1 bg-red-100 hover:bg-red-200 text-red-700 py-2 rounded-xl text-sm font-bold flex items-center justify-center gap-1 transition-colors"
-                >
-                  <XCircle className="w-4 h-4" /> Reject
-                </button>
-              </div>
+              <p className="text-sm text-gray-700">
+                <span className="font-semibold">Date:</span> {new Date(job.date).toLocaleDateString()} | <span className="font-semibold">Time:</span> {job.timeSlot} | <span className="font-semibold text-primary">₹{job.totalAmount}</span>
+              </p>
             </div>
           </div>
+          <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+            <button 
+              onClick={() => handleAction(job._id, 'accept')}
+              className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white px-6 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+            >
+              <CheckCircle className="w-4 h-4" /> Accept
+            </button>
+            <button 
+              onClick={() => handleAction(job._id, 'reject')}
+              className="flex-1 md:flex-none bg-red-100 hover:bg-red-200 text-red-700 px-6 py-2 rounded-lg text-sm font-bold flex items-center justify-center gap-2 transition-colors"
+            >
+              <XCircle className="w-4 h-4" /> Reject
+            </button>
+          </div>
         </div>
-      )}
-    </>
+      ))}
+    </div>
   );
 };
 

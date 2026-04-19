@@ -1,7 +1,6 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-const { admin } = require('../config/firebase');
 
 const generateToken = (id) => {
   return jwt.sign({ id }, process.env.JWT_SECRET, { expiresIn: '30d' });
@@ -76,52 +75,6 @@ exports.login = async (req, res) => {
   }
 };
 
-exports.googleLogin = async (req, res) => {
-  try {
-    const { idToken } = req.body;
-    
-    if (!admin) {
-      return res.status(500).json({ success: false, message: 'Firebase not configured on server' });
-    }
-
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
-    const { email, name, picture, uid } = decodedToken;
-
-    let user = await User.findOne({ email });
-    let isNewUser = false;
-
-    if (!user) {
-      user = await User.create({
-        name,
-        email,
-        googleId: uid,
-        avatar: picture,
-        role: 'user' // Requires set-role later if they want to be a worker
-      });
-      isNewUser = true;
-    } else if (!user.googleId) {
-      // Link Google account to existing email
-      user.googleId = uid;
-      user.avatar = user.avatar || picture;
-      await user.save();
-    }
-
-    res.status(200).json({
-      success: true,
-      data: {
-        _id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        isActive: user.isActive,
-        token: generateToken(user._id),
-        isNewUser
-      }
-    });
-  } catch (error) {
-    res.status(500).json({ success: false, message: error.message });
-  }
-};
 
 exports.setRole = async (req, res) => {
   try {

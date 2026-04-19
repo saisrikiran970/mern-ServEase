@@ -3,16 +3,12 @@ const cors = require('cors');
 const morgan = require('morgan');
 const dotenv = require('dotenv');
 const connectDB = require('./config/db');
-const { initFirebase } = require('./config/firebase');
 
 // Load environment variables
 dotenv.config();
 
 // Connect to Database
 connectDB();
-
-// Initialize Firebase
-initFirebase();
 
 const app = express();
 

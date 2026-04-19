@@ -1,9 +1,11 @@
 const Booking = require('../models/Booking');
 const Service = require('../models/Service');
 const User = require('../models/User');
+const Payment = require('../models/Payment');
 
 exports.createBooking = async (req, res) => {
   try {
+    console.log('Incoming Booking Data:', req.body);
     const { serviceId, workerId, address, date, timeSlot, paymentType } = req.body;
     
     if (!date || !timeSlot) {
@@ -32,7 +34,7 @@ exports.createBooking = async (req, res) => {
     }
 
     const booking = await Booking.create({
-      userId: req.user._id, // strictly using authenticated user token
+      userId: req.user.id, // strictly using authenticated user token
       workerId,
       serviceId,
       address,
@@ -40,7 +42,7 @@ exports.createBooking = async (req, res) => {
       timeSlot,
       paymentType,
       totalAmount: service.price,
-      status: 'pending' // As per prompt requirement
+      status: workerId ? 'assigned' : 'pending'
     });
 
     // Increment booking count
@@ -59,7 +61,19 @@ exports.getMyBookings = async (req, res) => {
       .populate('serviceId', 'title image price category')
       .populate('workerId', 'name phone rating avatar serviceType')
       .sort('-createdAt');
-    res.status(200).json({ success: true, data: bookings });
+      
+    const bookingsWithPayment = await Promise.all(bookings.map(async (booking) => {
+      const bObj = booking.toObject();
+      if (bObj.paymentType === 'before') {
+        bObj.isPaid = true;
+      } else {
+        const payment = await Payment.findOne({ bookingId: bObj._id, status: 'paid' });
+        bObj.isPaid = !!payment;
+      }
+      return bObj;
+    }));
+
+    res.status(200).json({ success: true, data: bookingsWithPayment });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

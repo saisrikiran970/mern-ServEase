@@ -12,7 +12,7 @@ const Register = () => {
   });
   const [loading, setLoading] = useState(false);
   
-  const { register, googleLogin } = useAuth();
+  const { register } = useAuth();
   const navigate = useNavigate();
 
   const handleChange = (e) => {
@@ -36,15 +36,6 @@ const Register = () => {
     setLoading(false);
   };
 
-  const handleGoogleLogin = async () => {
-    try {
-      await googleLogin();
-      toast.success('Signed up with Google!');
-      navigate('/select-role');
-    } catch (error) {
-      toast.error('Google sign up failed');
-    }
-  };
 
   return (
     <div className="min-h-[calc(100vh-4rem)] flex">
@@ -129,23 +120,6 @@ const Register = () => {
             </button>
           </form>
 
-          <div className="mt-8 relative">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-200"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-500">Or continue with</span>
-            </div>
-          </div>
-
-          <button
-            onClick={handleGoogleLogin}
-            type="button"
-            className="mt-6 w-full flex items-center justify-center gap-3 bg-white border border-gray-200 text-gray-700 font-medium py-3 px-4 rounded-xl hover:bg-gray-50 transition-colors"
-          >
-            <img src="https://www.svgrepo.com/show/475656/google-color.svg" alt="Google" className="h-5 w-5" />
-            Google
-          </button>
 
           <p className="mt-8 text-center text-sm text-gray-600">
             Already have an account?{' '}

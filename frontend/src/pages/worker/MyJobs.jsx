@@ -23,16 +23,26 @@ const MyJobs = () => {
 
   useEffect(() => {
     fetchJobs();
-  }, []);
+    const interval = setInterval(fetchJobs, 30000);
+    return () => clearInterval(interval);
+  }, [activeTab]);
 
   const handleAction = async (id, action) => {
     try {
-      if (action === 'accept') await api.put(`/worker/jobs/${id}/accept`);
-      else if (action === 'reject') await api.put(`/worker/jobs/${id}/reject`, { reason: 'Schedule conflict' });
-      else if (action === 'start') await api.put(`/worker/jobs/${id}/status`, { status: 'in-progress' });
-      else if (action === 'complete') await api.put(`/worker/jobs/${id}/status`, { status: 'completed' });
+      if (action === 'accept') {
+        await api.put(`/worker/jobs/${id}/accept`);
+        toast.success('Job Accepted');
+      } else if (action === 'reject') {
+        await api.put(`/worker/jobs/${id}/reject`, { reason: 'Schedule conflict' });
+        toast.success('Job Rejected');
+      } else if (action === 'start') {
+        await api.put(`/worker/jobs/${id}/status`, { status: 'in-progress' });
+        toast.success('Job started');
+      } else if (action === 'complete') {
+        await api.put(`/worker/jobs/${id}/status`, { status: 'completed' });
+        toast.success('Job Marked as Complete');
+      }
       
-      toast.success(`Job updated successfully`);
       fetchJobs();
     } catch (error) {
       toast.error(error.response?.data?.message || 'Action failed');
@@ -43,7 +53,7 @@ const MyJobs = () => {
   if (loading) return <div>Loading...</div>;
 
   const filteredJobs = jobs.filter(job => {
-    if (activeTab === 'pending') return job.status === 'pending';
+    if (activeTab === 'pending') return job.status === 'assigned';
     if (activeTab === 'in-progress') return job.status === 'in-progress';
     if (activeTab === 'completed') return job.status === 'completed';
     return true;
@@ -84,29 +94,34 @@ const MyJobs = () => {
                 </div>
                 <div className="text-right">
                   <p className="text-lg font-bold text-primary">₹{job.totalAmount}</p>
+                  {job.status === 'completed' && job.netEarnings && (
+                    <p className="text-sm font-semibold text-green-600">Net: ₹{job.netEarnings}</p>
+                  )}
                 </div>
               </div>
               
               <div className="bg-gray-50 p-4 rounded-xl mb-6 space-y-2 text-sm text-gray-700">
                 <p><strong>Customer:</strong> {job.userId?.name.split(' ')[0]}</p>
                 <p><strong>Date & Time:</strong> {new Date(job.date).toLocaleDateString()} | {job.timeSlot}</p>
-                <p><strong>Address:</strong> {job.address.street}, {job.address.city} - {job.address.pincode}</p>
+                <p><strong>Address:</strong> {job.address?.street}, {job.address?.city} - {job.address?.pincode}</p>
               </div>
               
               <div className="mt-auto pt-4 border-t border-gray-100 flex gap-3">
-                {job.status === 'pending' && (
+                {job.status === 'assigned' && (
                   <>
                     <button onClick={() => handleAction(job._id, 'reject')} className="flex-1 py-2.5 bg-red-50 hover:bg-red-100 text-red-700 font-semibold rounded-xl transition-colors">Reject</button>
                     <button onClick={() => handleAction(job._id, 'accept')} className="flex-1 py-2.5 bg-green-50 hover:bg-green-100 text-green-700 font-semibold rounded-xl transition-colors">Accept</button>
-                    <button onClick={() => handleAction(job._id, 'start')} className="flex-1 py-2.5 bg-primary hover:bg-blue-800 text-white font-semibold rounded-xl transition-colors">Start Job</button>
                   </>
                 )}
                 {job.status === 'in-progress' && (
                   <button onClick={() => handleAction(job._id, 'complete')} className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition-colors">Mark as Completed</button>
                 )}
                 {job.status === 'completed' && (
-                  <div className="w-full text-center py-2 text-green-600 font-semibold flex justify-center items-center gap-2">
-                    Job Completed Successfully
+                  <div className="w-full flex justify-between items-center bg-gray-50 p-3 rounded-xl border border-gray-100">
+                    <span className="font-semibold text-gray-700">Payment Status:</span>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold ${job.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                      {job.paymentStatus === 'paid' ? 'Paid' : 'Pending Payment'}
+                    </span>
                   </div>
                 )}
               </div>

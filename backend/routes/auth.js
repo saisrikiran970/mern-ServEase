@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, googleLogin, setRole, getMe } = require('../controllers/authController');
+const { register, login, setRole, getMe } = require('../controllers/authController');
 const { protect } = require('../middleware/auth');
 const { body } = require('express-validator');
 const { validate } = require('../middleware/validate');
@@ -16,7 +16,6 @@ router.post('/login', [
   body('password', 'Password is required').exists()
 ], validate, login);
 
-router.post('/google', googleLogin);
 
 router.put('/set-role', protect, setRole);
 

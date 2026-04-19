@@ -8,7 +8,35 @@ exports.getWorkerJobs = async (req, res) => {
       .populate('userId', 'name phone')
       .populate('serviceId', 'title category price')
       .sort('-date');
-    res.status(200).json({ success: true, data: jobs });
+      
+    const jobsWithDetails = await Promise.all(jobs.map(async (job) => {
+      const jobObj = job.toObject();
+      jobObj.netEarnings = job.totalAmount * 0.90;
+      
+      if (job.paymentType === 'before') {
+        jobObj.paymentStatus = 'paid';
+      } else {
+        const payment = await Payment.findOne({ bookingId: job._id, status: 'paid' });
+        jobObj.paymentStatus = payment ? 'paid' : 'pending payment';
+      }
+      return jobObj;
+    }));
+
+    res.status(200).json({ success: true, data: jobsWithDetails });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+exports.getPendingJobs = async (req, res) => {
+  try {
+    const pendingJobs = await Booking.find({ workerId: req.user.id, status: 'assigned' })
+      .populate('serviceId', 'title category price')
+      .populate('userId', 'name')
+      .sort('date');
+    
+    console.log('Assigned bookings found:', pendingJobs.length);
+    res.status(200).json({ success: true, data: pendingJobs });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -29,12 +57,10 @@ exports.acceptJob = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Job is not in assigned state' });
     }
 
-    // Accepting job doesn't change status to 'in-progress', it makes it ELIGIBLE for 'in-progress'
-    // Let's use a specific field or keep it assigned but add workerNote. Wait, the spec says:
-    // PUT /jobs/:id/accept → accept job (sets status: in-progress eligible)
-    // Actually, usually accepting means they are ready. 
-    // We'll leave the status as 'assigned'. The UI will then show "Mark In Progress" button.
-    res.status(200).json({ success: true, data: job, message: 'Job accepted' });
+    job.status = 'in-progress';
+    await job.save();
+
+    res.status(200).json({ success: true, data: job, message: 'Job accepted and is now in-progress' });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -89,11 +115,9 @@ exports.updateJobStatus = async (req, res) => {
     job.status = status;
     await job.save();
 
-    // If completed, update worker completedJobs count
+    // If completed, update worker completedJobs count atomically
     if (status === 'completed') {
-      const worker = await User.findById(req.user._id);
-      worker.completedJobs += 1;
-      await worker.save();
+      await User.findByIdAndUpdate(req.user._id, { $inc: { completedJobs: 1 } });
     }
 
     res.status(200).json({ success: true, data: job });
@@ -121,12 +145,9 @@ exports.getEarnings = async (req, res) => {
       netEarned: p.workerEarnings
     }));
 
-    const totalEarnings = earningsData.reduce((acc, curr) => acc + curr.netEarned, 0);
-
-    // Update User model
+    // Read totalEarnings from User model
     const worker = await User.findById(req.user._id);
-    worker.totalEarnings = totalEarnings;
-    await worker.save();
+    const totalEarnings = worker.totalEarnings || 0;
 
     res.status(200).json({ success: true, data: { totalEarnings, history: earningsData } });
   } catch (error) {

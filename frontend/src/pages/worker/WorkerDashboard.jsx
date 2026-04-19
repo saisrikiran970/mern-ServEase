@@ -103,19 +103,18 @@ const WorkerDashboard = () => {
     }
   };
 
-  if (user?.isActive === false) {
-    return (
-      <div className="bg-red-50 text-red-800 p-8 rounded-3xl border border-red-200 text-center shadow-sm">
-        <h2 className="text-2xl font-bold mb-2">Account Suspended</h2>
-        <p>Your account is on hold due to low ratings or policy violations. Contact support.</p>
-      </div>
-    );
-  }
-
   if (loading) return <div>Loading...</div>;
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto">
+    <div className="relative space-y-6 max-w-6xl mx-auto">
+      {user?.isActive === false && (
+        <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex items-center justify-center -m-6 p-6 rounded-3xl">
+          <div className="bg-red-50 text-red-800 p-10 rounded-3xl border border-red-200 text-center shadow-2xl max-w-lg">
+            <h2 className="text-3xl font-bold mb-4">Account on Hold</h2>
+            <p className="text-lg">Your account is on hold due to your rating dropping below 2.5. You cannot accept or manage jobs at this time. Please contact support.</p>
+          </div>
+        </div>
+      )}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-3xl border border-gray-100 shadow-sm gap-4">
         <div>
           <h1 className="text-3xl font-heading font-bold text-gray-900 mb-1">Hello, {user.name}</h1>
